@@ -1,0 +1,307 @@
+// =============================================================================
+// BTC/USD Silver Bullet Strategy – Pine Script v6
+// Chart:    BTC/USD, 1-minute
+// Author:   Quantitative Developer
+//
+// Logic overview
+// ──────────────
+// 1. Market Bias      – 15-min 50 EMA; Long only above it, Short only below.
+// 2. Liquidity Sweep  – price wicks beyond the previous session high/low
+//                       (session anchored at Midnight or 8:30 AM New York time)
+//                       then closes back inside the range.
+// 3. MSS + Displacement – after the sweep a strong full-bodied candle (≥60 %
+//                       body-to-range) breaks the recent swing high/low,
+//                       confirming a Market Structure Shift.
+// 4. Fair Value Gap   – a three-bar imbalance formed during the displacement;
+//                       a limit entry is placed at the 50 % retest of the gap.
+// 5. Time Filter      – trades execute only during the ICT "Silver Bullet"
+//                       window: 10:00 AM – 10:59 AM New York time.
+// 6. Risk Management  – 1.5× ATR stop loss, 2:1 RR take profit,
+//                       stop moved to break-even once 1:1 RR is reached.
+// 7. Integrity        – barmerge.lookahead_off on all request.security() calls.
+// =============================================================================
+
+//@version=6
+strategy(
+     title             = "BTC/USD Silver Bullet (1-min)",
+     shorttitle        = "BTC SB",
+     overlay           = true,
+     pyramiding        = 0,
+     default_qty_type  = strategy.percent_of_equity,
+     default_qty_value = 1,
+     commission_type   = strategy.commission.percent,
+     commission_value  = 0.05,
+     slippage          = 2
+     )
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INPUTS
+// ─────────────────────────────────────────────────────────────────────────────
+emaLen        = input.int(50,    "Bias EMA Length (15-min)",  minval = 1)
+atrLen        = input.int(14,    "ATR Length (1-min)",        minval = 1)
+atrMult       = input.float(1.5, "ATR SL Multiplier",         minval = 0.1, step = 0.1)
+rrRatio       = input.float(2.0, "Risk-to-Reward Ratio",      minval = 0.5, step = 0.1)
+swingLookback = input.int(5,     "Swing Lookback for MSS",    minval = 2)
+sessionChoice = input.string("Midnight", "Session Anchor",
+                     options = ["Midnight", "8:30 AM NY"])
+showLabels    = input.bool(true,  "Show Entry / SL / TP Labels")
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIMEZONE HELPER  (New York = "America/New_York" handles DST automatically)
+// ─────────────────────────────────────────────────────────────────────────────
+nyHour = hour(time,   "America/New_York")
+nyMin  = minute(time, "America/New_York")
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1. MARKET BIAS – 15-min 50 EMA  (lookahead OFF for integrity)
+// ─────────────────────────────────────────────────────────────────────────────
+ema50_15m = request.security(
+     syminfo.tickerid, "15",
+     ta.ema(close, emaLen),
+     lookahead = barmerge.lookahead_off
+     )
+
+biasLong  = close > ema50_15m
+biasShort = close < ema50_15m
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2. PREVIOUS SESSION HIGH / LOW
+//    "Midnight" session  → 00:00 NY  (full prior day)
+//    "8:30 AM NY" session → 08:30 NY  (prior RTH open session)
+// ─────────────────────────────────────────────────────────────────────────────
+isSessionStart =
+     sessionChoice == "Midnight"
+     ? (nyHour == 0  and nyMin == 0)
+     : (nyHour == 8  and nyMin == 30)
+
+var float sessionHigh     = na
+var float sessionLow      = na
+var float prevSessionHigh = na
+var float prevSessionLow  = na
+
+if isSessionStart
+    prevSessionHigh := sessionHigh
+    prevSessionLow  := sessionLow
+    sessionHigh     := high
+    sessionLow      := low
+else
+    sessionHigh := na(sessionHigh) ? high : math.max(sessionHigh, high)
+    sessionLow  := na(sessionLow)  ? low  : math.min(sessionLow,  low)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3. LIQUIDITY SWEEP DETECTION
+//    Bull sweep: wick below prev session low then closes back above it.
+//    Bear sweep: wick above prev session high then closes back below it.
+// ─────────────────────────────────────────────────────────────────────────────
+bullSweepBar = not na(prevSessionLow)  and low  < prevSessionLow  and close > prevSessionLow
+bearSweepBar = not na(prevSessionHigh) and high > prevSessionHigh and close < prevSessionHigh
+
+var bool sweepBull = false
+var bool sweepBear = false
+
+if bullSweepBar
+    sweepBull := true
+    sweepBear := false
+
+if bearSweepBar
+    sweepBear := true
+    sweepBull := false
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 4. MARKET STRUCTURE SHIFT (MSS) + DISPLACEMENT
+//    Bull MSS: after bull sweep, a full-bodied up-candle closes above the
+//              most-recent swing high (break of structure to the upside).
+//    Bear MSS: after bear sweep, a full-bodied down-candle closes below the
+//              most-recent swing low (break of structure to the downside).
+// ─────────────────────────────────────────────────────────────────────────────
+recentSwingHigh = ta.highest(high, swingLookback)[1]
+recentSwingLow  = ta.lowest(low,   swingLookback)[1]
+
+candleRange    = high - low
+bodySize       = math.abs(close - open)
+isBullDisplace = close > open and candleRange > 0 and (bodySize / candleRange) >= 0.6
+isBearDisplace = close < open and candleRange > 0 and (bodySize / candleRange) >= 0.6
+
+mssLong  = sweepBull and isBullDisplace and close > recentSwingHigh
+mssShort = sweepBear and isBearDisplace and close < recentSwingLow
+
+var bool mssLongActive  = false
+var bool mssShortActive = false
+
+if mssLong
+    mssLongActive  := true
+    mssShortActive := false
+
+if mssShort
+    mssShortActive := true
+    mssLongActive  := false
+
+// Contrary sweep invalidates the opposing MSS setup
+if bearSweepBar
+    mssLongActive  := false
+
+if bullSweepBar
+    mssShortActive := false
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. FAIR VALUE GAP (FVG) DETECTION  (three-bar imbalance)
+//    Bullish FVG: high[2] < low[0]  → price gap between prior-prior high and
+//                                      current low (imbalance zone above mkt).
+//    Bearish FVG: low[2]  > high[0] → price gap between prior-prior low and
+//                                      current high (imbalance zone below mkt).
+//    Entry limit = midpoint of the gap (50 % retest).
+// ─────────────────────────────────────────────────────────────────────────────
+bullFVG_bottom = high[2]
+bullFVG_top    = low[0]
+bullFVG_mid    = (bullFVG_top + bullFVG_bottom) / 2.0
+validBullFVG   = bullFVG_top > bullFVG_bottom
+
+bearFVG_top    = low[2]
+bearFVG_bottom = high[0]
+bearFVG_mid    = (bearFVG_top + bearFVG_bottom) / 2.0
+validBearFVG   = bearFVG_top > bearFVG_bottom
+
+// Latch the most-recent FVG midpoint while the corresponding MSS is active
+var float longFVGMid  = na
+var float shortFVGMid = na
+
+if mssLongActive and validBullFVG
+    longFVGMid := bullFVG_mid
+
+if mssShortActive and validBearFVG
+    shortFVGMid := bearFVG_mid
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. TIME FILTER – Silver Bullet window  10:00 AM – 10:59 AM New York
+// ─────────────────────────────────────────────────────────────────────────────
+inSilverBullet = (nyHour == 10)   // 10:00 AM – 10:59 AM New York (full Silver Bullet hour)
+
+// Cancel pending FVG setups once the window closes (no open position)
+if not inSilverBullet and strategy.position_size == 0
+    longFVGMid  := na
+    shortFVGMid := na
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. ATR  (used for stop-loss sizing)
+// ─────────────────────────────────────────────────────────────────────────────
+atrValue = ta.atr(atrLen)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 8. ENTRY LOGIC  (limit order at 50 % FVG retest during Silver Bullet)
+//    Pine Strategy approximates a limit by checking whether the bar's
+//    high/low reaches the FVG midpoint while all conditions hold.
+// ─────────────────────────────────────────────────────────────────────────────
+var float entryPrice  = na
+var float slPrice     = na
+var float tpPrice     = na
+var float beLevel     = na    // price at which 1:1 RR is reached
+var bool  beTriggered = false
+
+// ── Long Entry ──────────────────────────────────────────────────────────────
+longCondition =
+     inSilverBullet         and
+     biasLong               and
+     mssLongActive          and
+     not na(longFVGMid)     and
+     low <= longFVGMid      and   // bar touches the FVG midpoint (retest)
+     strategy.position_size == 0
+
+if longCondition
+    entryPrice  := longFVGMid
+    slPrice     := entryPrice - atrMult * atrValue
+    tpPrice     := entryPrice + rrRatio * (entryPrice - slPrice)
+    beLevel     := entryPrice + 1.0    * (entryPrice - slPrice)
+    beTriggered := false
+    strategy.entry("Long", strategy.long, limit = entryPrice)
+    strategy.exit("Long Exit", "Long", limit = tpPrice, stop = slPrice)
+    mssLongActive := false
+    longFVGMid    := na
+    if showLabels
+        label.new(bar_index, low - atrValue * 0.5,
+             "▲ LONG\nEntry: " + str.tostring(math.round(entryPrice, 2)) +
+             "\nSL: "    + str.tostring(math.round(slPrice, 2))          +
+             "\nTP: "    + str.tostring(math.round(tpPrice, 2)),
+             color     = color.new(color.green, 20),
+             textcolor = color.white,
+             style     = label.style_label_up,
+             size      = size.small)
+
+// ── Short Entry ─────────────────────────────────────────────────────────────
+shortCondition =
+     inSilverBullet         and
+     biasShort              and
+     mssShortActive         and
+     not na(shortFVGMid)    and
+     high >= shortFVGMid    and   // bar touches the FVG midpoint (retest)
+     strategy.position_size == 0
+
+if shortCondition
+    entryPrice  := shortFVGMid
+    slPrice     := entryPrice + atrMult * atrValue
+    tpPrice     := entryPrice - rrRatio * (slPrice - entryPrice)
+    beLevel     := entryPrice - 1.0    * (slPrice  - entryPrice)
+    beTriggered := false
+    strategy.entry("Short", strategy.short, limit = entryPrice)
+    strategy.exit("Short Exit", "Short", limit = tpPrice, stop = slPrice)
+    mssShortActive := false
+    shortFVGMid    := na
+    if showLabels
+        label.new(bar_index, high + atrValue * 0.5,
+             "▼ SHORT\nEntry: " + str.tostring(math.round(entryPrice, 2)) +
+             "\nSL: "    + str.tostring(math.round(slPrice, 2))           +
+             "\nTP: "    + str.tostring(math.round(tpPrice, 2)),
+             color     = color.new(color.red, 20),
+             textcolor = color.white,
+             style     = label.style_label_down,
+             size      = size.small)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 9. BREAK-EVEN MANAGEMENT  (move SL to entry price after 1:1 RR is hit)
+// ─────────────────────────────────────────────────────────────────────────────
+if strategy.position_size > 0 and not beTriggered and not na(beLevel)
+    if high >= beLevel
+        beTriggered := true
+        strategy.exit("Long Exit", "Long", limit = tpPrice, stop = entryPrice)
+
+if strategy.position_size < 0 and not beTriggered and not na(beLevel)
+    if low <= beLevel
+        beTriggered := true
+        strategy.exit("Short Exit", "Short", limit = tpPrice, stop = entryPrice)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 10. VISUALS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// 15-min 50 EMA (bias reference)
+plot(ema50_15m,
+     title     = "15m 50 EMA",
+     color     = color.new(color.orange, 0),
+     linewidth = 2)
+
+// Previous session high / low
+plot(prevSessionHigh,
+     title = "Prev Session High",
+     color = color.new(color.red,   50),
+     style = plot.style_stepline)
+
+plot(prevSessionLow,
+     title = "Prev Session Low",
+     color = color.new(color.green, 50),
+     style = plot.style_stepline)
+
+// Active FVG midpoints
+plot(longFVGMid,
+     title     = "Bull FVG Mid",
+     color     = color.new(color.lime,    60),
+     style     = plot.style_circles,
+     linewidth = 2)
+
+plot(shortFVGMid,
+     title     = "Bear FVG Mid",
+     color     = color.new(color.fuchsia, 60),
+     style     = plot.style_circles,
+     linewidth = 2)
+
+// Silver Bullet window highlight
+bgcolor(inSilverBullet ? color.new(color.blue, 92) : na,
+     title = "Silver Bullet Window")
