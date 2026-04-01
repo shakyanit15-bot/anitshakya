@@ -33,6 +33,8 @@ bearTrend = close < emaFast and emaFast < emaMid and emaMid < emaSlow
 bullMacdCross = ta.crossover(macdHist, 0)
 bearMacdCross = ta.crossunder(macdHist, 0)
 
+scoreThreshold = input.int(75, "Confluence Score Threshold", minval = 0, maxval = 100)
+
 longScore =
     (bullTrend ? 20 : 0) +
     (rsiValue > 50 ? 20 : 0) +
@@ -50,10 +52,10 @@ shortScore =
 nyHour = hour(time, "America/New_York")
 nyMin  = minute(time, "America/New_York")
 
-inNyOpenSession = (nyHour > 9 or (nyHour == 9 and nyMin >= 30)) and (nyHour < 12 or (nyHour == 12 and nyMin == 0))
+inNyOpenSession = (nyHour == 9 and nyMin >= 30) or (nyHour >= 10 and nyHour < 12)
 
-longSignal  = inNyOpenSession and longScore >= 75
-shortSignal = inNyOpenSession and shortScore >= 75
+longSignal  = inNyOpenSession and longScore >= scoreThreshold
+shortSignal = inNyOpenSession and shortScore >= scoreThreshold
 
 atrValue          = ta.atr(14)
 atrStopDistance   = 1.5 * atrValue
@@ -63,21 +65,17 @@ stopMode = input.string("ATR (1.5x)", "Stop Mode", options = ["ATR (1.5x)", "Fix
 targetMode = input.string("RR 1:2", "Take Profit Mode", options = ["RR 1:2", "Fixed (30 pts)"])
 
 stopDistance = stopMode == "ATR (1.5x)" ? atrStopDistance : fixedStopDistance
-baseTargetDistance = targetMode == "RR 1:2" ? stopDistance * 2.0 : 30.0
-
 var float activeStopDistance = na
 var float activeTargetDistance = na
 
-if longSignal and strategy.position_size <= 0
+if longSignal and strategy.position_size == 0
     activeStopDistance   := stopDistance
     activeTargetDistance := targetMode == "RR 1:2" ? activeStopDistance * 2.0 : 30.0
-    strategy.close("Short")
     strategy.entry("Long", strategy.long)
 
-if shortSignal and strategy.position_size >= 0
+if shortSignal and strategy.position_size == 0
     activeStopDistance   := stopDistance
     activeTargetDistance := targetMode == "RR 1:2" ? activeStopDistance * 2.0 : 30.0
-    strategy.close("Long")
     strategy.entry("Short", strategy.short)
 
 if strategy.position_size > 0 and not na(activeStopDistance) and not na(activeTargetDistance)
@@ -90,7 +88,7 @@ if strategy.position_size < 0 and not na(activeStopDistance) and not na(activeTa
     shortLimit = strategy.position_avg_price - activeTargetDistance
     strategy.exit("Short Exit", "Short", stop = shortStop, limit = shortLimit)
 
-if nyHour == 16 and nyMin == 0
+if nyHour >= 16
     strategy.close_all(comment = "Session close 16:00 EST")
 
 if strategy.position_size == 0
