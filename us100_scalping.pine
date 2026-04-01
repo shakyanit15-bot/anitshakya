@@ -1,15 +1,5 @@
 //@version=6
-strategy(
-    title             = "US100 Scalping Confluence (1m/3m)",
-    shorttitle        = "US100 Scalper",
-    overlay           = true,
-    pyramiding        = 0,
-    default_qty_type  = strategy.percent_of_equity,
-    default_qty_value = 1,
-    commission_type   = strategy.commission.percent,
-    commission_value  = 0.01,
-    slippage          = 1
-)
+strategy(title = "US100 Scalping Confluence (1m/3m)", shorttitle = "US100 Scalper", overlay = true, pyramiding = 0, default_qty_type = strategy.percent_of_equity, default_qty_value = 1, commission_type = strategy.commission.percent, commission_value = 0.01, slippage = 1)
 
 emaFast = ta.ema(close, 9)
 emaMid  = ta.ema(close, 21)
