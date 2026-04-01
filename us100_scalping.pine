@@ -1,0 +1,105 @@
+//@version=6
+strategy(
+    title             = "US100 Scalping Confluence (1m/3m)",
+    shorttitle        = "US100 Scalper",
+    overlay           = true,
+    pyramiding        = 0,
+    default_qty_type  = strategy.percent_of_equity,
+    default_qty_value = 1,
+    commission_type   = strategy.commission.percent,
+    commission_value  = 0.01,
+    slippage          = 1
+)
+
+emaFast = ta.ema(close, 9)
+emaMid  = ta.ema(close, 21)
+emaSlow = ta.ema(close, 50)
+
+rsiValue = ta.rsi(close, 14)
+[macdLine, macdSignal, macdHist] = ta.macd(close, 12, 26, 9)
+
+volumeSma20 = ta.sma(volume, 20)
+volumePass  = volume > (1.2 * volumeSma20)
+
+vixSymbol     = input.symbol("CBOE:VIX", "VIX Symbol")
+vixFlatRange  = input.float(0.4, "VIX Flat Range Threshold", minval = 0.0, step = 0.1)
+vixClose      = request.security(vixSymbol, timeframe.period, close, lookahead = barmerge.lookahead_off)
+vixRange20    = ta.highest(vixClose, 20) - ta.lowest(vixClose, 20)
+volatilityOn  = vixRange20 > vixFlatRange
+
+bullTrend = close > emaFast and emaFast > emaMid and emaMid > emaSlow
+bearTrend = close < emaFast and emaFast < emaMid and emaMid < emaSlow
+
+bullMacdCross = ta.crossover(macdHist, 0)
+bearMacdCross = ta.crossunder(macdHist, 0)
+
+longScore =
+    (bullTrend ? 20 : 0) +
+    (rsiValue > 50 ? 20 : 0) +
+    (bullMacdCross ? 20 : 0) +
+    (volumePass ? 20 : 0) +
+    (volatilityOn ? 20 : 0)
+
+shortScore =
+    (bearTrend ? 20 : 0) +
+    (rsiValue < 50 ? 20 : 0) +
+    (bearMacdCross ? 20 : 0) +
+    (volumePass ? 20 : 0) +
+    (volatilityOn ? 20 : 0)
+
+nyHour = hour(time, "America/New_York")
+nyMin  = minute(time, "America/New_York")
+
+inNyOpenSession = (nyHour > 9 or (nyHour == 9 and nyMin >= 30)) and (nyHour < 12 or (nyHour == 12 and nyMin == 0))
+
+longSignal  = inNyOpenSession and longScore >= 75
+shortSignal = inNyOpenSession and shortScore >= 75
+
+atrValue          = ta.atr(14)
+atrStopDistance   = 1.5 * atrValue
+fixedStopDistance = 15.0
+
+stopMode = input.string("ATR (1.5x)", "Stop Mode", options = ["ATR (1.5x)", "Fixed (15 pts)"])
+targetMode = input.string("RR 1:2", "Take Profit Mode", options = ["RR 1:2", "Fixed (30 pts)"])
+
+stopDistance = stopMode == "ATR (1.5x)" ? atrStopDistance : fixedStopDistance
+baseTargetDistance = targetMode == "RR 1:2" ? stopDistance * 2.0 : 30.0
+
+var float activeStopDistance = na
+var float activeTargetDistance = na
+
+if longSignal and strategy.position_size <= 0
+    activeStopDistance   := stopDistance
+    activeTargetDistance := targetMode == "RR 1:2" ? activeStopDistance * 2.0 : 30.0
+    strategy.close("Short")
+    strategy.entry("Long", strategy.long)
+
+if shortSignal and strategy.position_size >= 0
+    activeStopDistance   := stopDistance
+    activeTargetDistance := targetMode == "RR 1:2" ? activeStopDistance * 2.0 : 30.0
+    strategy.close("Long")
+    strategy.entry("Short", strategy.short)
+
+if strategy.position_size > 0 and not na(activeStopDistance) and not na(activeTargetDistance)
+    longStop  = strategy.position_avg_price - activeStopDistance
+    longLimit = strategy.position_avg_price + activeTargetDistance
+    strategy.exit("Long Exit", "Long", stop = longStop, limit = longLimit)
+
+if strategy.position_size < 0 and not na(activeStopDistance) and not na(activeTargetDistance)
+    shortStop  = strategy.position_avg_price + activeStopDistance
+    shortLimit = strategy.position_avg_price - activeTargetDistance
+    strategy.exit("Short Exit", "Short", stop = shortStop, limit = shortLimit)
+
+if nyHour == 16 and nyMin == 0
+    strategy.close_all(comment = "Session close 16:00 EST")
+
+if strategy.position_size == 0
+    activeStopDistance   := na
+    activeTargetDistance := na
+
+plot(emaFast, title = "EMA 9", color = color.new(color.aqua, 0), linewidth = 2)
+plot(emaMid, title = "EMA 21", color = color.new(color.orange, 0), linewidth = 2)
+plot(emaSlow, title = "EMA 50", color = color.new(color.fuchsia, 0), linewidth = 2)
+
+plotshape(longSignal, title = "Buy", style = shape.labelup, text = "Buy", location = location.belowbar, color = color.new(color.green, 0), textcolor = color.white, size = size.tiny)
+plotshape(shortSignal, title = "Sell", style = shape.labeldown, text = "Sell", location = location.abovebar, color = color.new(color.red, 0), textcolor = color.white, size = size.tiny)
