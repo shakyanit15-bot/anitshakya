@@ -35,19 +35,9 @@ bearMacdCross = ta.crossunder(macdHist, 0)
 
 scoreThreshold = input.int(75, "Confluence Score Threshold", minval = 0, maxval = 100)
 
-longScore =
-    (bullTrend ? 20 : 0) +
-    (rsiValue > 50 ? 20 : 0) +
-    (bullMacdCross ? 20 : 0) +
-    (volumePass ? 20 : 0) +
-    (volatilityOn ? 20 : 0)
+longScore = (bullTrend ? 20 : 0) + (rsiValue > 50 ? 20 : 0) + (bullMacdCross ? 20 : 0) + (volumePass ? 20 : 0) + (volatilityOn ? 20 : 0)
 
-shortScore =
-    (bearTrend ? 20 : 0) +
-    (rsiValue < 50 ? 20 : 0) +
-    (bearMacdCross ? 20 : 0) +
-    (volumePass ? 20 : 0) +
-    (volatilityOn ? 20 : 0)
+shortScore = (bearTrend ? 20 : 0) + (rsiValue < 50 ? 20 : 0) + (bearMacdCross ? 20 : 0) + (volumePass ? 20 : 0) + (volatilityOn ? 20 : 0)
 
 nyHour = hour(time, "America/New_York")
 nyMin  = minute(time, "America/New_York")
