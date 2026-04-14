@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+models/artifacts/
+reports/*.csv
+reports/*.json
+reports/.tmp*
