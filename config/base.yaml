@@ -3,6 +3,8 @@ system:
   symbol: XAUUSD
   timeframes: [M5, M15, H1]
   timezone: UTC
+  point_size: 0.01
+  point_value_per_lot: 100.0
 
 data:
   input_csv: data/xauusd_mt5_bars.csv

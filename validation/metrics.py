@@ -5,6 +5,7 @@ import pandas as pd
 
 
 def compute_metrics(trades: pd.DataFrame, equity: pd.DataFrame, bars_per_year: int = 12 * 24 * 252) -> dict:
+    # Default assumes 5-minute bars: 12 bars/hour * 24 hours/day * 252 trading days/year.
     if equity.empty:
         return {}
 
@@ -35,7 +36,7 @@ def compute_metrics(trades: pd.DataFrame, equity: pd.DataFrame, bars_per_year: i
     avg_win = float(wins.mean()) if len(wins) else 0.0
     avg_loss = float(losses.mean()) if len(losses) else 0.0
 
-    exposure = float((equity.get("blocked", pd.Series(False, index=equity.index)) == False).mean())
+    exposure = float((~equity.get("blocked", pd.Series(False, index=equity.index))).mean())
     turnover = float(len(trades) / len(eq)) if len(eq) else 0.0
 
     return {
@@ -61,7 +62,8 @@ def regime_breakdown(trades: pd.DataFrame, market: pd.DataFrame) -> dict:
 
     market = market.copy()
     market["regime_trend"] = (market.get("adx", 0) >= 25).astype(int)
-    market["regime_vol"] = (market.get("atr", 0) >= market.get("atr", pd.Series(index=market.index)).median()).astype(int)
+    atr_series = market["atr"] if "atr" in market.columns else pd.Series(0.0, index=market.index)
+    market["regime_vol"] = (atr_series >= atr_series.median()).astype(int)
 
     out = {}
     merged = trades.merge(market[["regime_trend", "regime_vol"]], left_on="entry_time", right_index=True, how="left")

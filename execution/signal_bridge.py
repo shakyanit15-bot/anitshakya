@@ -50,7 +50,11 @@ def run_bridge(config_path: str, profile_path: str | None, model_path: str, outp
     if vol_unhealthy or spread_unhealthy or news_block:
         signal = "NO_TRADE"
 
-    sl_points = float(latest["atr"] * cfg["labeling"]["atr_mult_lower"] / 0.01)
+    point_size = float(cfg.get("system", {}).get("point_size", 0.01))
+    if point_size <= 0:
+        raise ValueError("system.point_size must be > 0")
+    # Convert price distance into broker points consumed by the EA.
+    sl_points = float(latest["atr"] * cfg["labeling"]["atr_mult_lower"] / point_size)
     out = Path(output_signal_file)
     out.parent.mkdir(parents=True, exist_ok=True)
 

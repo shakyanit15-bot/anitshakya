@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import itertools
 import json
+import tempfile
+import os
+from pathlib import Path
+
+import yaml
 
 from backtest.run_backtest import run
 from execution.config_utils import load_config
@@ -24,11 +30,7 @@ def main() -> None:
 
     results = []
     for th, slm, sp, slp in itertools.product(thresholds, sl_mults, spread_shocks, slippage_shocks):
-        cfg = base_cfg.copy()
-        cfg["model"] = cfg["model"].copy()
-        cfg["labeling"] = cfg["labeling"].copy()
-        cfg["risk"] = cfg["risk"].copy()
-        cfg["execution"] = cfg["execution"].copy()
+        cfg = copy.deepcopy(base_cfg)
 
         cfg["model"]["confidence_threshold_buy"] = th
         cfg["model"]["confidence_threshold_sell"] = th
@@ -37,13 +39,15 @@ def main() -> None:
         cfg["execution"]["slippage_points"] = int(cfg["execution"]["slippage_points"] * slp)
 
         # Persist temp config to reuse normal runner
-        tmp_cfg_path = "/tmp/mad_turtle_tmp_sensitivity.yaml"
-        import yaml
-
+        tmp_dir = Path(tempfile.gettempdir())
+        fd_cfg, tmp_cfg_path = tempfile.mkstemp(prefix="mad_turtle_cfg_", suffix=".yaml", dir=tmp_dir)
+        os.close(fd_cfg)
         with open(tmp_cfg_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(cfg, f)
 
-        out = run(tmp_cfg_path, None, args.model, "/tmp/mad_turtle_tmp_backtest.json")
+        fd_bt, tmp_bt_path = tempfile.mkstemp(prefix="mad_turtle_bt_", suffix=".json", dir=tmp_dir)
+        os.close(fd_bt)
+        out = run(tmp_cfg_path, None, args.model, tmp_bt_path)
         results.append(
             {
                 "threshold": th,
@@ -53,6 +57,8 @@ def main() -> None:
                 "metrics": out["metrics"],
             }
         )
+        Path(tmp_cfg_path).unlink(missing_ok=True)
+        Path(tmp_bt_path).unlink(missing_ok=True)
 
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump({"results": results}, f, indent=2)

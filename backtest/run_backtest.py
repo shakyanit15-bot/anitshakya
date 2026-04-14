@@ -4,6 +4,8 @@ import argparse
 import json
 from pathlib import Path
 
+import pandas as pd
+
 from backtest.engine import EventDrivenBacktester
 from data.data_loader import DataLoader
 from execution.config_utils import load_config
@@ -31,7 +33,7 @@ def run(config_path: str, profile_path: str | None, model_path: str, output_path
     ds = make_dataset(features, raw, cfg)
 
     signal_rows = build_signals(ds.drop(columns=["label"]), model_path)
-    signal_df = __import__("pandas").DataFrame(signal_rows).set_index("time")
+    signal_df = pd.DataFrame(signal_rows).set_index("time")
 
     market = raw.loc[signal_df.index].copy()
     market["atr"] = ds.loc[signal_df.index, "atr"]

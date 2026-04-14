@@ -15,6 +15,9 @@ from features.feature_generator import generate_features
 from features.labeling import make_dataset
 from models.calibration import CalibratedModel
 
+# Labels are intentionally encoded as {-1: SELL, 0: NO_TRADE, 1: BUY} across the project.
+CLASS_LABEL_OFFSET = -1
+
 
 def _build_model(name: str, seed: int):
     if name == "lightgbm":
@@ -98,7 +101,8 @@ def train(config_path: str, profile_path: str | None, output_dir: str) -> dict:
             calibrated.fit(x.values[tr], y[tr])
             probs.append(calibrated.predict_proba(x.values[te]))
         avg_prob = np.mean(probs, axis=0)
-        pred = np.argmax(avg_prob, axis=1) - 1
+        # Model classes are encoded as {-1, 0, 1}; argmax returns {0, 1, 2}, so shift by CLASS_LABEL_OFFSET.
+        pred = np.argmax(avg_prob, axis=1) + CLASS_LABEL_OFFSET
         val_scores.append(float((pred == y[te]).mean()))
 
     artifact = {

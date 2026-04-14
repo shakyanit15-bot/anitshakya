@@ -5,6 +5,7 @@
 #include <Trade/Trade.mqh>
 
 CTrade trade;
+const double INVALID_ATR = 0.0;
 
 input string InpSymbol = "XAUUSD";
 input double InpRiskPct = 0.005; // 0.5%
@@ -76,7 +77,10 @@ void OnTick()
       return;
    }
 
-   ManageOpenPosition();
+   double atr = iATR(InpSymbol, PERIOD_M5, InpATRPeriod, 0);
+   if(atr == EMPTY_VALUE || atr <= 0)
+      atr = INVALID_ATR;
+   ManageOpenPosition(atr);
    if(HasOpenPosition())
       return;
 
@@ -99,8 +103,7 @@ void OnTick()
    if(msg.signal != "BUY" && msg.signal != "SELL")
       return;
 
-   double atr = iATR(InpSymbol, PERIOD_M5, InpATRPeriod, 0);
-   if(atr <= 0)
+   if(atr <= INVALID_ATR)
       return;
 
    double stop_points = (msg.sl_points > 0 ? msg.sl_points : atr * InpATRStopMult / _Point);
@@ -132,7 +135,7 @@ void OnTick()
    }
 }
 
-void ManageOpenPosition()
+void ManageOpenPosition(double atr)
 {
    if(!PositionSelect(InpSymbol))
       return;
@@ -142,16 +145,14 @@ void ManageOpenPosition()
    double sl = PositionGetDouble(POSITION_SL);
    double current = (type == POSITION_TYPE_BUY) ? SymbolInfoDouble(InpSymbol, SYMBOL_BID) : SymbolInfoDouble(InpSymbol, SYMBOL_ASK);
 
-   if(InpUseTrailingStop)
+   if(InpUseTrailingStop && atr > INVALID_ATR)
    {
-      double atr = iATR(InpSymbol, PERIOD_M5, InpATRPeriod, 0);
-      if(atr > 0)
+      double trail_dist = InpTrailingATRMult * atr;
+      double new_sl = (type == POSITION_TYPE_BUY) ? current - trail_dist : current + trail_dist;
+      bool improve = (type == POSITION_TYPE_BUY && new_sl > sl) || (type == POSITION_TYPE_SELL && (sl == 0 || new_sl < sl));
+      if(improve)
       {
-         double trail_dist = InpTrailingATRMult * atr;
-         double new_sl = (type == POSITION_TYPE_BUY) ? current - trail_dist : current + trail_dist;
-         bool improve = (type == POSITION_TYPE_BUY && new_sl > sl) || (type == POSITION_TYPE_SELL && (sl == 0 || new_sl < sl));
-         if(improve)
-            trade.PositionModify(InpSymbol, new_sl, 0.0);
+         trade.PositionModify(InpSymbol, new_sl, 0.0);
       }
    }
 
@@ -268,9 +269,14 @@ bool ReadSignal(SignalMsg &msg)
    while(!FileIsEnding(f))
    {
       string t = FileReadString(f);
+      if(FileIsEnding(f)) break;
       string s = FileReadString(f);
+      if(FileIsEnding(f)) break;
       string c = FileReadString(f);
+      if(FileIsEnding(f)) break;
       string sl = FileReadString(f);
+      if(StringLen(t) == 0 || StringLen(s) == 0 || StringLen(c) == 0 || StringLen(sl) == 0)
+         continue;
       if(StringLen(t) > 0)
       {
          last_time = t;

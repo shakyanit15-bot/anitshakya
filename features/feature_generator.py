@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 
+# Fixed UTC session bins (not DST-adjusted).
 SESSION_BINS = {
     "Asia": (0, 7),
     "London": (7, 13),
@@ -83,7 +84,8 @@ def generate_features(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     x["adx"] = _adx(df, c["adx_period"])
     x["atr"] = atr
     x["realized_vol"] = x["ret_1"].rolling(c["realized_vol_window"]).std()
-    x["range_expansion"] = (df["high"] - df["low"]) / (df["high"] - df["low"]).rolling(c["range_window"]).mean()
+    hl_range = df["high"] - df["low"]
+    x["range_expansion"] = hl_range / hl_range.rolling(c["range_window"]).mean()
 
     body = (df["close"] - df["open"]).abs()
     rng = (df["high"] - df["low"]).replace(0, np.nan)

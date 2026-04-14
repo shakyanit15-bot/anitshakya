@@ -23,6 +23,7 @@ class EventDrivenBacktester:
     def __init__(self, cfg: dict):
         self.cfg = cfg
         self.risk_engine = RiskEngine(cfg)
+        self.point_value_per_lot = cfg.get("system", {}).get("point_value_per_lot", 100.0)
 
     def run(self, market_df: pd.DataFrame, signal_df: pd.DataFrame, initial_equity: float = 100000.0) -> tuple[pd.DataFrame, pd.DataFrame]:
         equity = initial_equity
@@ -64,7 +65,7 @@ class EventDrivenBacktester:
 
                 if exit_price is not None:
                     pnl_points = (exit_price - pos.entry_price) if pos.side == "BUY" else (pos.entry_price - exit_price)
-                    gross = pnl_points * pos.lots * 100
+                    gross = pnl_points * pos.lots * self.point_value_per_lot
                     costs = (slippage * pos.lots) + (commission * pos.lots)
                     net = gross - costs
                     equity += net

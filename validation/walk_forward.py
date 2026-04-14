@@ -62,10 +62,14 @@ def run_walk_forward(config_path: str, profile_path: str | None, model_path: str
         )
         start += step
 
+    def _mean_profit_factor(local_runs: list[dict]) -> float:
+        vals = pd.Series([r["metrics"].get("ProfitFactor", 0.0) for r in local_runs]).replace(float("inf"), pd.NA).dropna()
+        return float(vals.mean()) if not vals.empty else 0.0
+
     summary = {
         "runs": runs,
         "mean_sharpe": float(pd.Series([r["metrics"].get("Sharpe", 0.0) for r in runs]).mean()) if runs else 0.0,
-        "mean_profit_factor": float(pd.Series([r["metrics"].get("ProfitFactor", 0.0) for r in runs]).replace([float("inf")], pd.NA).dropna().mean()) if runs else 0.0,
+        "mean_profit_factor": _mean_profit_factor(runs),
     }
     return summary
 

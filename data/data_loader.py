@@ -20,6 +20,6 @@ class DataLoader:
         df[self.datetime_col] = pd.to_datetime(df[self.datetime_col], utc=True)
         df = df.sort_values(self.datetime_col).drop_duplicates(self.datetime_col)
         df = df.set_index(self.datetime_col)
-        numeric_cols = [c for c in df.columns if c not in []]
+        numeric_cols = list(df.columns)
         df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
         return df.dropna(subset=["open", "high", "low", "close"])
