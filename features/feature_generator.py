@@ -88,7 +88,7 @@ def generate_features(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     body = (df["close"] - df["open"]).abs()
     rng = (df["high"] - df["low"]).replace(0, np.nan)
     x["body_ratio"] = body / rng
-    x["upper_wick_ratio"] = (df[["open", "close"]].max(axis=1) - df["high"]).abs() / rng
+    x["upper_wick_ratio"] = (df["high"] - df[["open", "close"]].max(axis=1)).abs() / rng
     x["lower_wick_ratio"] = (df[["open", "close"]].min(axis=1) - df["low"]).abs() / rng
     x["breakout_strength"] = (df["close"] - donch_hi.shift(1)) / atr.replace(0, np.nan)
 
@@ -96,6 +96,6 @@ def generate_features(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     x["spread"] = spread
     x["spread_state"] = (spread > spread.rolling(c["spread_ma_window"]).mean()).astype(int)
 
-    x = pd.concat([x, _session_feature(df.index), add_multi_timeframe_alignment(x.fillna(method="ffill"), "ma_fast", "ma_slow")], axis=1)
+    x = pd.concat([x, _session_feature(df.index), add_multi_timeframe_alignment(x.ffill(), "ma_fast", "ma_slow")], axis=1)
     x = x.replace([np.inf, -np.inf], np.nan)
     return x

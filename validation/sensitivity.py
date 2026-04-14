@@ -37,13 +37,13 @@ def main() -> None:
         cfg["execution"]["slippage_points"] = int(cfg["execution"]["slippage_points"] * slp)
 
         # Persist temp config to reuse normal runner
-        tmp_cfg_path = "reports/.tmp_sensitivity.yaml"
+        tmp_cfg_path = "/tmp/mad_turtle_tmp_sensitivity.yaml"
         import yaml
 
         with open(tmp_cfg_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(cfg, f)
 
-        out = run(tmp_cfg_path, None, args.model, "reports/.tmp_backtest.json")
+        out = run(tmp_cfg_path, None, args.model, "/tmp/mad_turtle_tmp_backtest.json")
         results.append(
             {
                 "threshold": th,
