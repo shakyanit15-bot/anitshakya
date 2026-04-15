@@ -1,0 +1,13 @@
+profile: aggressive
+risk:
+  risk_pct: 0.0075
+  daily_loss_limit_pct: 0.03
+  max_drawdown_pct: 0.16
+model:
+  confidence_threshold_buy: 0.55
+  confidence_threshold_sell: 0.55
+execution:
+  slippage_points: 12
+filters:
+  news_blackout_minutes_before: 15
+  news_blackout_minutes_after: 15

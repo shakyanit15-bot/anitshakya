@@ -1,0 +1,13 @@
+profile: conservative
+risk:
+  risk_pct: 0.0025
+  daily_loss_limit_pct: 0.01
+  max_drawdown_pct: 0.08
+model:
+  confidence_threshold_buy: 0.68
+  confidence_threshold_sell: 0.68
+execution:
+  slippage_points: 6
+filters:
+  news_blackout_minutes_before: 45
+  news_blackout_minutes_after: 45

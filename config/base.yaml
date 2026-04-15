@@ -1,0 +1,74 @@
+system:
+  name: mad_turtle_xauusd
+  symbol: XAUUSD
+  timeframes: [M5, M15, H1]
+  timezone: UTC
+  point_size: 0.01
+  point_value_per_lot: 100.0
+
+data:
+  input_csv: data/xauusd_mt5_bars.csv
+  datetime_col: time
+  required_columns: [time, open, high, low, close, tick_volume, spread]
+
+features:
+  atr_period: 14
+  adx_period: 14
+  donchian_period: 20
+  ma_fast: 20
+  ma_slow: 50
+  realized_vol_window: 20
+  range_window: 20
+  momentum_windows: [3, 6, 12]
+  spread_ma_window: 50
+
+labeling:
+  atr_mult_upper: 1.4
+  atr_mult_lower: 1.4
+  max_hold_bars: 36
+
+model:
+  random_seed: 42
+  ensemble: [lightgbm, xgboost, catboost]
+  calibration_method: isotonic
+  confidence_threshold_buy: 0.60
+  confidence_threshold_sell: 0.60
+  no_trade_max_confidence: 0.45
+
+risk:
+  risk_pct: 0.005
+  min_risk_pct: 0.0025
+  max_risk_pct: 0.0075
+  daily_loss_limit_pct: 0.02
+  max_drawdown_pct: 0.12
+  spread_limit_points: 50
+  max_slippage_points: 20
+  max_positions: 1
+
+execution:
+  latency_ms: 120
+  commission_per_lot: 7.0
+  slippage_points: 8
+  trailing_stop_atr_mult: 1.2
+  use_trailing_stop: true
+
+filters:
+  sessions_enabled: [London, NewYork]
+  news_blackout_minutes_before: 30
+  news_blackout_minutes_after: 30
+
+validation:
+  walk_forward_train_bars: 9000
+  walk_forward_validate_bars: 2000
+  walk_forward_test_bars: 2000
+  walk_forward_step_bars: 2000
+  purged_cv_folds: 5
+  embargo_bars: 48
+  pass_criteria:
+    min_sharpe: 1.0
+    min_profit_factor: 1.20
+    max_drawdown_pct: 0.15
+    min_trades: 120
+
+report:
+  output_dir: reports

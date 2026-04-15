@@ -1,0 +1,13 @@
+profile: moderate
+risk:
+  risk_pct: 0.005
+  daily_loss_limit_pct: 0.02
+  max_drawdown_pct: 0.12
+model:
+  confidence_threshold_buy: 0.60
+  confidence_threshold_sell: 0.60
+execution:
+  slippage_points: 8
+filters:
+  news_blackout_minutes_before: 30
+  news_blackout_minutes_after: 30
