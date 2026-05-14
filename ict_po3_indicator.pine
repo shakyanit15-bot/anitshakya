@@ -44,11 +44,11 @@ if accStart
     sweepDir := 0
     reEntryConfirmed := false
     signalFired := false
-    if accBox != na
+    if not na(accBox)
         box.delete(accBox)
-    if accHighLine != na
+    if not na(accHighLine)
         line.delete(accHighLine)
-    if accLowLine != na
+    if not na(accLowLine)
         line.delete(accLowLine)
     if showRange
         accBox := box.new(bar_index, high, bar_index, low, bgcolor=rangeFillColor, border_color=rangeColor)
@@ -56,7 +56,7 @@ if accStart
 if inAccumulation
     accHigh := math.max(accHigh, high)
     accLow := math.min(accLow, low)
-    if showRange and accBox != na
+    if showRange and not na(accBox)
         box.set_right(accBox, bar_index)
         box.set_top(accBox, accHigh)
         box.set_bottom(accBox, accLow)
