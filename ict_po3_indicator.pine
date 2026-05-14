@@ -1,0 +1,101 @@
+//@version=5
+indicator("ICT PO3 Session Indicator", overlay=true, max_boxes_count=20, max_lines_count=20, max_labels_count=50)
+
+sessionTimezone = input.timezone("Etc/UTC", "Session Timezone")
+accumulationSession = input.session("0000-0500", "Accumulation Session")
+manipulationSession = input.session("0500-0800", "Manipulation Session")
+distributionSession = input.session("0800-1200", "Distribution Session")
+
+sweepBufferTicks = input.int(0, "Sweep Buffer (ticks)", minval=0)
+sweepBuffer = sweepBufferTicks * syminfo.mintick
+
+showRange = input.bool(true, "Show Accumulation Range")
+showSweeps = input.bool(true, "Show Sweep Labels")
+showSignals = input.bool(true, "Show PO3 Signals")
+
+rangeColor = input.color(color.new(color.blue, 0), "Range Color")
+rangeFillColor = input.color(color.new(color.blue, 85), "Range Fill Color")
+sweepHighColor = input.color(color.new(color.red, 0), "Sweep High Label Color")
+sweepLowColor = input.color(color.new(color.green, 0), "Sweep Low Label Color")
+longColor = input.color(color.new(color.green, 0), "Long Signal Color")
+shortColor = input.color(color.new(color.red, 0), "Short Signal Color")
+
+inAccumulation = not na(time(timeframe.period, accumulationSession, sessionTimezone))
+inManipulation = not na(time(timeframe.period, manipulationSession, sessionTimezone))
+inDistribution = not na(time(timeframe.period, distributionSession, sessionTimezone))
+
+accStart = inAccumulation and not inAccumulation[1]
+accEnd = not inAccumulation and inAccumulation[1]
+
+var float accHigh = na
+var float accLow = na
+var box accBox = na
+var line accHighLine = na
+var line accLowLine = na
+var bool sweepDetected = false
+var int sweepDir = 0
+var bool reEntryConfirmed = false
+var bool signalFired = false
+
+if accStart
+    accHigh := high
+    accLow := low
+    sweepDetected := false
+    sweepDir := 0
+    reEntryConfirmed := false
+    signalFired := false
+    if accBox != na
+        box.delete(accBox)
+    if accHighLine != na
+        line.delete(accHighLine)
+    if accLowLine != na
+        line.delete(accLowLine)
+    if showRange
+        accBox := box.new(bar_index, high, bar_index, low, bgcolor=rangeFillColor, border_color=rangeColor)
+
+if inAccumulation
+    accHigh := math.max(accHigh, high)
+    accLow := math.min(accLow, low)
+    if showRange and accBox != na
+        box.set_right(accBox, bar_index)
+        box.set_top(accBox, accHigh)
+        box.set_bottom(accBox, accLow)
+
+if accEnd and showRange and not na(accHigh) and not na(accLow)
+    accHighLine := line.new(bar_index, accHigh, bar_index + 1, accHigh, extend=extend.right, color=rangeColor, style=line.style_dashed)
+    accLowLine := line.new(bar_index, accLow, bar_index + 1, accLow, extend=extend.right, color=rangeColor, style=line.style_dashed)
+
+if inManipulation and not sweepDetected and not na(accHigh) and not na(accLow)
+    if high > accHigh + sweepBuffer
+        sweepDetected := true
+        sweepDir := 1
+        if showSweeps
+            label.new(bar_index, high, "Sweep High", style=label.style_label_down, color=sweepHighColor, textcolor=color.white)
+    else if low < accLow - sweepBuffer
+        sweepDetected := true
+        sweepDir := -1
+        if showSweeps
+            label.new(bar_index, low, "Sweep Low", style=label.style_label_up, color=sweepLowColor, textcolor=color.white)
+
+if sweepDetected and not reEntryConfirmed and not na(accHigh) and not na(accLow)
+    if sweepDir == 1 and close < accHigh
+        reEntryConfirmed := true
+    if sweepDir == -1 and close > accLow
+        reEntryConfirmed := true
+
+longSignal = false
+shortSignal = false
+
+if sweepDetected and reEntryConfirmed and not signalFired and inDistribution and not na(accHigh) and not na(accLow)
+    if sweepDir == 1 and close < accLow
+        shortSignal := true
+    if sweepDir == -1 and close > accHigh
+        longSignal := true
+    if longSignal or shortSignal
+        signalFired := true
+
+plotshape(showSignals and longSignal, title="PO3 Long", style=shape.triangleup, location=location.belowbar, color=longColor, size=size.small, text="PO3 L")
+plotshape(showSignals and shortSignal, title="PO3 Short", style=shape.triangledown, location=location.abovebar, color=shortColor, size=size.small, text="PO3 S")
+
+alertcondition(longSignal, "PO3 Long", "ICT PO3 long signal.")
+alertcondition(shortSignal, "PO3 Short", "ICT PO3 short signal.")

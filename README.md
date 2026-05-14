@@ -77,6 +77,10 @@ pip install -r requirements.txt
 pytest -q
 ```
 
+## TradingView Indicator (ICT PO3)
+- Pine Script indicator file: `ict_po3_indicator.pine`
+- Configure accumulation, manipulation, and distribution sessions via inputs (default UTC sessions).
+
 ## MQL5 Deployment Notes
 - Copy `mql5/MadTurtleXAUUSD.mq5` into `MQL5/Experts/` and compile in MetaEditor.
 - Ensure `signal_pipe.csv` is available to terminal **Common Files** path.
