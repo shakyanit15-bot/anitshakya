@@ -80,6 +80,7 @@ pytest -q
 ## TradingView Indicator (ICT PO3)
 - Pine Script indicator file: `ict_po3_indicator.pine`
 - Configure accumulation, manipulation, and distribution sessions via inputs (default UTC sessions).
+- Set the session timezone using an IANA timezone string (e.g., `America/New_York`).
 
 ## MQL5 Deployment Notes
 - Copy `mql5/MadTurtleXAUUSD.mq5` into `MQL5/Experts/` and compile in MetaEditor.

@@ -1,7 +1,7 @@
 //@version=5
 indicator("ICT PO3 Session Indicator", overlay=true, max_boxes_count=20, max_lines_count=20, max_labels_count=50)
 
-sessionTimezone = input.string("Etc/UTC", "Session Timezone")
+sessionTimezone = input.string("Etc/UTC", "Session Timezone", tooltip="Use an IANA timezone string, e.g., America/New_York.")
 accumulationSession = input.session("0000-0500", "Accumulation Session")
 manipulationSession = input.session("0500-0800", "Manipulation Session")
 distributionSession = input.session("0800-1200", "Distribution Session")
